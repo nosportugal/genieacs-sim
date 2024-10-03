@@ -4,6 +4,7 @@ const http = require("http");
 const https = require("https");
 const xmlParser = require("./xml-parser");
 const xmlUtils = require("./xml-utils");
+const sim = require("./simulator");
 
 const INFORM_PARAMS = [
   "Device.DeviceInfo.SpecVersion",
@@ -27,6 +28,13 @@ const INFORM_PARAMS = [
 
 function inform(device, event, callback) {
   let manufacturer = "";
+  if (device["LastBoot"]) {
+    manufacturer = xmlUtils.node(
+      "LastBoot",
+      {},
+      xmlParser.encodeEntities(device["LastBoot"][1])
+    );
+  }
   if (device["DeviceID.Manufacturer"]) {
     manufacturer = xmlUtils.node(
       "Manufacturer",
@@ -255,7 +263,6 @@ function GetParameterValues(device, request, callback) {
   return callback(response);
 }
 
-
 function SetParameterValues(device, request, callback) {
   let parameterValues = request.children[0].children;
 
@@ -269,7 +276,6 @@ function SetParameterValues(device, request, callback) {
         case "Value":
           value = c;
           break;
-            
       }
     }
 
@@ -409,6 +415,22 @@ function Download(device, request, callback) {
   return callback(response);
 }
 
+function Reboot(device, request, callback) {
+  let response = xmlUtils.node("cwmp:RebootResponse", {}, "");
+  callback(response);
+  sim.updateParameter("LastBoot", new Date().toISOString());
+  sim.stopSession(10000); //stops accepting connections for 10 seconds
+  setTimeout(function() {
+    sim.startSession("1 BOOT, M Reboot, 4 VALUE CHANGE");
+  }, 15000);
+}
+
+function FactoryReset(device, request, callback) {
+  let response = xmlUtils.node("cwmp:FactoryResetResponse", {}, "");
+  callback(response);
+  setTimeout(function(){process.kill(process.pid);
+  },500);
+}
 
 exports.inform = inform;
 exports.getPending = getPending;
@@ -418,3 +440,5 @@ exports.SetParameterValues = SetParameterValues;
 exports.AddObject = AddObject;
 exports.DeleteObject = DeleteObject;
 exports.Download = Download;
+exports.Reboot = Reboot;
+exports.FactoryReset = FactoryReset;
