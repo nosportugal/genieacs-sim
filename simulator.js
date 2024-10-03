@@ -225,7 +225,7 @@ function listenForConnectionRequests(serialNumber, acsUrlOptions, callback) {
   let ip, port;
   // Start a dummy socket to get the used local ip
   let socket = net.createConnection({
-    port: 80,
+    port: acsUrlOptions.port,
     host: acsUrlOptions.hostname,
     family: 4
   })
