@@ -2,8 +2,7 @@
 "use strict";
 
 const cluster = require("cluster");
-
-if (!cluster.isMaster) {
+if (!cluster.isPrimary) {
   const simulator = require("./simulator");
   const csvParser = require("./csv-parser");
   const fs = require("fs");
@@ -12,6 +11,7 @@ if (!cluster.isMaster) {
   const acsUrl = process.env["ACS_URL"];
   const dataModel = process.env["DATA_MODEL"];
   const serialNumber = process.env["SERIAL_NUMBER"];
+  const macAddress = process.env["MAC_ADDRESS"];
 
   let device;
   const data = fs.readFileSync(dataModel);
@@ -33,8 +33,7 @@ if (!cluster.isMaster) {
   else {
     device = JSON.parse(data);
   }
-
-  simulator.start(device, serialNumber, acsUrl);
+  simulator.start(device, serialNumber, macAddress, acsUrl);
   return;
 }
 
@@ -52,6 +51,7 @@ const program = require("commander")
   .option("-p, --processes [count]", "Number of devices to simulate (default: 1)", parseFloat, 1)
   .option("-w, --wait [milliseconds]", "Waiting period between process spawning (default: 1000)", parseFloat, 1000)
   .option("-s, --serial [offset]", "Serial number offset (default: 0)", parseFloat, 0)
+  .option("-a, --mac-address [address]", "MAC address (default: 20:2B:C1:E0:69:69)", "20:2B:C1:E0:69:69")
   .parse(process.argv);
 
 if (!/^(http|https):\/\//.test(program.acsUrl)) {
@@ -59,27 +59,28 @@ if (!/^(http|https):\/\//.test(program.acsUrl)) {
   process.exit(1);
 }
 
-cluster.on("fork", function(worker) {
-  console.log(`Simulator ${worker.env["SERIAL_NUMBER"]} started`);
+cluster.on("fork", function (worker) {
+  console.log(`Simulator ${worker.env["SERIAL_NUMBER"]} (${worker.env["MAC_ADDRESS"]}) started`);
 });
 
-cluster.on("exit", function(worker, code, signal) {
-  console.log(`Simulator ${worker.env["SERIAL_NUMBER"]} died (${signal || code}). Restarting in 10 seconds...`)
-  setTimeout(function() {
-    let newWorker = cluster.fork(worker.env);
-    newWorker.env = worker.env;
-  }, 10000);
+cluster.on("exit", function (worker, code, signal) {
+    console.log(`Simulator ${worker.env["SERIAL_NUMBER"]} (${worker.env["MAC_ADDRESS"]}) died (${signal || code}). Restarting in 10 seconds...`)
+    setTimeout(function () {
+      let newWorker = cluster.fork(worker.env);
+      newWorker.env = worker.env;
+    }, 10000);
 });
 
 
-for (let i = 0; i < program.processes; ++ i) {
-  setTimeout(function() {
+for (let i = 0; i < program.processes; ++i) {
+  setTimeout(function () {
     let env = {
       "SERIAL_NUMBER": `00000${program.serial + i}`.slice(-6),
+      "MAC_ADDRESS": program.macAddress.slice(0, -2) + i.toString().padStart(2, '0'),
       "ACS_URL": program.acsUrl,
       "DATA_MODEL": program.dataModel,
     };
     let worker = cluster.fork(env);
     worker.env = env;
-  }, i  * program.wait)
+  }, i * program.wait)
 }
