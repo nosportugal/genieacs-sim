@@ -419,10 +419,10 @@ function Reboot(device, request, callback) {
   let response = xmlUtils.node("cwmp:RebootResponse", {}, "");
   callback(response);
   sim.updateParameter("LastBoot", new Date().toISOString());
-  sim.stopSession(10000); //stops accepting connections for 10 seconds
+  let timeout = sim.stopSession(); //stops accepting connections for timeoutseconds
   setTimeout(function() {
     sim.startSession("1 BOOT, M Reboot, 4 VALUE CHANGE");
-  }, 15000);
+  }, timeout + 5000);
 }
 
 function FactoryReset(device, request, callback) {

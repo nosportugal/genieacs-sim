@@ -33,7 +33,7 @@ if (!cluster.isPrimary) {
   else {
     device = JSON.parse(data);
   }
-  simulator.start(device, serialNumber, macAddress, acsUrl);
+  simulator.start(device, serialNumber, macAddress, acsUrl, program.timeout);
   return;
 }
 
@@ -52,6 +52,7 @@ const program = require("commander")
   .option("-w, --wait [milliseconds]", "Waiting period between process spawning (default: 1000)", parseFloat, 1000)
   .option("-s, --serial [offset]", "Serial number offset (default: 0)", parseFloat, 0)
   .option("-a, --mac-address [address]", "MAC address (default: 20:2B:C1:E0:69:69)", "20:2B:C1:E0:69:69")
+  .option("-t, --timeout [timeout]", "Time inbetween reconecs for reboot and factory reset (default: 10 seconds)",parseFloat, 10000)
   .parse(process.argv);
 
 if (!/^(http|https):\/\//.test(program.acsUrl)) {
@@ -64,13 +65,12 @@ cluster.on("fork", function (worker) {
 });
 
 cluster.on("exit", function (worker, code, signal) {
-    console.log(`Simulator ${worker.env["SERIAL_NUMBER"]} (${worker.env["MAC_ADDRESS"]}) died (${signal || code}). Restarting in 10 seconds...`)
+    console.log(`Simulator ${worker.env["SERIAL_NUMBER"]} (${worker.env["MAC_ADDRESS"]}) died (${signal || code}). Restarting in ${program.timeout} seconds...`)
     setTimeout(function () {
       let newWorker = cluster.fork(worker.env);
       newWorker.env = worker.env;
-    }, 10000);
+    }, program.timeout);
 });
-
 
 for (let i = 0; i < program.processes; ++i) {
   setTimeout(function () {

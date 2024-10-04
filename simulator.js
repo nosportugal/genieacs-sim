@@ -22,6 +22,7 @@ let defaultDeviceValue = null;
 let httpAgent = null;
 let basicAuth;
 let acceptConnections = true;
+let timeout = 10000;
 
 function createSoapDocument(id, body) {
   let headerNode = xmlUtils.node(
@@ -262,7 +263,8 @@ function listenForConnectionRequests(serialNumber, acsUrlOptions, callback) {
     });
 }
 
-function start(dataModel, serialNumber, macAddress, acsUrl) {
+function start(dataModel, serialNumber, macAddress, acsUrl, defaultTimes) {
+  timeout = defaultTimes;
   device = dataModel;
   defaultDeviceValue = dataModel;
   if(device["LastBoot"]){
@@ -307,13 +309,14 @@ function start(dataModel, serialNumber, macAddress, acsUrl) {
   });
 }
 
-function stopSession(timeout) {
+function stopSession() {
   acceptConnections = false;
   console.log(`Simulator Stoped listening for requests for ${timeout}`);
   setTimeout(() => {
     acceptConnections = true;
     console.log(`Simulator resumed listening.`);
   }, timeout);
+  return timeout;
 }
 
 function updateParameter(parameter, value) {
