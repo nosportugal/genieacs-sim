@@ -70,7 +70,7 @@ cluster.on("exit", function (worker, code, signal) {
     setTimeout(function () {
       let newWorker = cluster.fork(worker.env);
       newWorker.env = worker.env;
-    }, program.defaultTimeout);
+    }, program.defaultTimeout * 1000);
 });
 
 for (let i = 0; i < program.processes; ++i) {

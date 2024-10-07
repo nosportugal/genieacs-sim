@@ -420,7 +420,7 @@ function Reboot(device, request, callback) {
   sim.updateParameter("LastBoot", new Date().toISOString());
   let timeout = sim.stopSession(); //stops accepting connections for timeoutseconds
   setTimeout(function() {
-    sim.startSession("1 BOOT, M Reboot, 4 VALUE CHANGE");
+    sim.startSession("1 BOOT,M Reboot,4 VALUE CHANGE");
   }, parseInt(timeout) + 5000);
 }
 
