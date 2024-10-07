@@ -1,4 +1,5 @@
 Parameter,Object,Writable,Value,Value type
+LastBoot,false,true,"0",xsd:string
 DeviceID.Manufacturer,false,false,"Huawei Technologies Co., Ltd.",xsd:string
 DeviceID.OUI,false,false,202BC1,xsd:string
 DeviceID.ProductClass,false,false,BM632w,xsd:string
