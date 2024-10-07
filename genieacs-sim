@@ -12,7 +12,7 @@ if (!cluster.isPrimary) {
   const dataModel = process.env["DATA_MODEL"];
   const serialNumber = process.env["SERIAL_NUMBER"];
   const macAddress = process.env["MAC_ADDRESS"];
-  const DefaultTimeout = process.env["DEFAULT_TIMEOUT"];
+  const defaultTimeout = process.env["DEFAULT_TIMEOUT"];
 
   let device;
   const data = fs.readFileSync(dataModel);
@@ -34,7 +34,7 @@ if (!cluster.isPrimary) {
   else {
     device = JSON.parse(data);
   }
-  simulator.start(device, serialNumber, macAddress, acsUrl, DefaultTimeout);
+  simulator.start(device, serialNumber, macAddress, acsUrl, defaultTimeout);
   return;
 }
 
@@ -53,7 +53,7 @@ const program = require("commander")
   .option("-w, --wait [milliseconds]", "Waiting period between process spawning (default: 1000)", parseFloat, 1000)
   .option("-s, --serial [offset]", "Serial number offset (default: 0)", parseFloat, 0)
   .option("-a, --mac-address [address]", "MAC address (default: 20:2B:C1:E0:69:69)", "20:2B:C1:E0:69:69")
-  .option("-t, --default-timeout [seconds]", "Time inbetween reconecs for reboot and factory reset (default: 10000)",parseFloat, 10)
+  .option("-t, --default-timeout [seconds]", "Time in between reconnects for reboot and factory reset (default: 10000)",parseFloat, 10)
   .parse(process.argv);
 
 if (!/^(http|https):\/\//.test(program.acsUrl)) {
