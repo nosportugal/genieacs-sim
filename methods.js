@@ -163,7 +163,6 @@ function inform(device, event, callback) {
   return callback(inform);
 }
 
-
 const pending = [];
 
 function getPending() {
@@ -422,7 +421,7 @@ function Reboot(device, request, callback) {
   let timeout = sim.stopSession(); //stops accepting connections for timeoutseconds
   setTimeout(function() {
     sim.startSession("1 BOOT, M Reboot, 4 VALUE CHANGE");
-  }, timeout + 5000);
+  }, parseInt(timeout) + 5000);
 }
 
 function FactoryReset(device, request, callback) {

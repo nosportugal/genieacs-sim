@@ -12,6 +12,7 @@ if (!cluster.isPrimary) {
   const dataModel = process.env["DATA_MODEL"];
   const serialNumber = process.env["SERIAL_NUMBER"];
   const macAddress = process.env["MAC_ADDRESS"];
+  const DefaultTimeout = process.env["DEFAULT_TIMEOUT"];
 
   let device;
   const data = fs.readFileSync(dataModel);
@@ -33,7 +34,7 @@ if (!cluster.isPrimary) {
   else {
     device = JSON.parse(data);
   }
-  simulator.start(device, serialNumber, macAddress, acsUrl, program.timeout);
+  simulator.start(device, serialNumber, macAddress, acsUrl, DefaultTimeout);
   return;
 }
 
@@ -52,7 +53,7 @@ const program = require("commander")
   .option("-w, --wait [milliseconds]", "Waiting period between process spawning (default: 1000)", parseFloat, 1000)
   .option("-s, --serial [offset]", "Serial number offset (default: 0)", parseFloat, 0)
   .option("-a, --mac-address [address]", "MAC address (default: 20:2B:C1:E0:69:69)", "20:2B:C1:E0:69:69")
-  .option("-t, --timeout [timeout]", "Time inbetween reconecs for reboot and factory reset (default: 10 seconds)",parseFloat, 10000)
+  .option("-t, --default-timeout [seconds]", "Time inbetween reconecs for reboot and factory reset (default: 10000)",parseFloat, 10)
   .parse(process.argv);
 
 if (!/^(http|https):\/\//.test(program.acsUrl)) {
@@ -65,11 +66,11 @@ cluster.on("fork", function (worker) {
 });
 
 cluster.on("exit", function (worker, code, signal) {
-    console.log(`Simulator ${worker.env["SERIAL_NUMBER"]} (${worker.env["MAC_ADDRESS"]}) died (${signal || code}). Restarting in ${program.timeout} seconds...`)
+    console.log(`Simulator ${worker.env["SERIAL_NUMBER"]} (${worker.env["MAC_ADDRESS"]}) died (${signal || code}). Restarting in ${program.defaultTimeout} seconds...`)
     setTimeout(function () {
       let newWorker = cluster.fork(worker.env);
       newWorker.env = worker.env;
-    }, program.timeout);
+    }, program.defaultTimeout);
 });
 
 for (let i = 0; i < program.processes; ++i) {
@@ -79,6 +80,7 @@ for (let i = 0; i < program.processes; ++i) {
       "MAC_ADDRESS": program.macAddress.slice(0, -2) + i.toString().padStart(2, '0'),
       "ACS_URL": program.acsUrl,
       "DATA_MODEL": program.dataModel,
+      "DEFAULT_TIMEOUT": program.defaultTimeout * 1000
     };
     let worker = cluster.fork(env);
     worker.env = env;
