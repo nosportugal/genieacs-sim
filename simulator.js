@@ -96,7 +96,7 @@ function sendRequest(xml, callback) {
     });
   });
 
-  request.setTimeout(30000, function (err) {
+  request.setTimeout(parseInt(timeout)+30000, function (err) {
     throw new Error("Socket timed out");
   });
 
@@ -263,8 +263,8 @@ function listenForConnectionRequests(serialNumber, acsUrlOptions, callback) {
     });
 }
 
-function start(dataModel, serialNumber, macAddress, acsUrl, defaultTimes) {
-  timeout = defaultTimes;
+function start(dataModel, serialNumber, macAddress, acsUrl, defaultTimeout) {
+  timeout = defaultTimeout;
   device = dataModel;
   defaultDeviceValue = dataModel;
   if(device["LastBoot"]){
