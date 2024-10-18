@@ -267,9 +267,6 @@ function start(dataModel, serialNumber, macAddress, acsUrl, defaultTimeout) {
   timeout = defaultTimeout;
   device = dataModel;
   defaultDeviceValue = dataModel;
-  if(device["LastBoot"]){
-    device["LastBoot"][1] = new Date().toISOString();
-  }
   if (device["DeviceID.SerialNumber"])
     device["DeviceID.SerialNumber"][1] = serialNumber;
   if (device["Device.DeviceInfo.SerialNumber"])

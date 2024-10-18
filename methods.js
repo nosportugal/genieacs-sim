@@ -28,13 +28,6 @@ const INFORM_PARAMS = [
 
 function inform(device, event, callback) {
   let manufacturer = "";
-  if (device["LastBoot"]) {
-    manufacturer = xmlUtils.node(
-      "LastBoot",
-      {},
-      xmlParser.encodeEntities(device["LastBoot"][1])
-    );
-  }
   if (device["DeviceID.Manufacturer"]) {
     manufacturer = xmlUtils.node(
       "Manufacturer",
@@ -45,7 +38,7 @@ function inform(device, event, callback) {
   else if (device["Device.DeviceInfo.Manufacturer"]) {
     manufacturer = xmlUtils.node(
       "Manufacturer",
-      {}, 
+      {},
       xmlParser.encodeEntities(device["Device.DeviceInfo.Manufacturer"][1])
     );
   } else if (device["InternetGatewayDevice.DeviceInfo.Manufacturer"]) {
@@ -121,15 +114,19 @@ function inform(device, event, callback) {
   }
 
   let deviceId = xmlUtils.node("DeviceId", {}, [manufacturer, oui, productClass, serialNumber]);
+  var splitEvent = event.split(",");
+  let eventStruct = "";
 
-  let eventStruct = xmlUtils.node(
-    "EventStruct",
-    {},
-    [
-      xmlUtils.node("EventCode", {}, event || "2 PERIODIC"),
-      xmlUtils.node("CommandKey")
-    ]
-  );
+  splitEvent.forEach(ev => {
+     eventStruct += xmlUtils.node(
+      "EventStruct",
+      {},
+      [
+        xmlUtils.node("EventCode", {}, ev || "2 PERIODIC"),
+        xmlUtils.node("CommandKey")
+      ]
+    );
+  });
 
   let evnt = xmlUtils.node("Event", {
     "soap-enc:arrayType": "cwmp:EventStruct[1]"
@@ -417,11 +414,11 @@ function Download(device, request, callback) {
 function Reboot(device, request, callback) {
   let response = xmlUtils.node("cwmp:RebootResponse", {}, "");
   callback(response);
-  sim.updateParameter("LastBoot", new Date().toISOString());
   let timeout = sim.stopSession(); //stops accepting connections for timeoutseconds
+
   setTimeout(function() {
     sim.startSession("1 BOOT,M Reboot,4 VALUE CHANGE");
-  }, parseInt(timeout) + 5000);
+  }, parseInt(timeout) + 10000);
 }
 
 function FactoryReset(device, request, callback) {
