@@ -114,10 +114,16 @@ function inform(device, event, callback) {
   }
 
   let deviceId = xmlUtils.node("DeviceId", {}, [manufacturer, oui, productClass, serialNumber]);
-  var splitEvent = event.split(",");
   let eventStruct = "";
+  let splitEvents = [];
+  if(event.includes(",")){
+    splitEvents = event.split(",");
+  }
+  else{
+    splitEvents = [event];
+  }
 
-  splitEvent.forEach(ev => {
+  splitEvents.forEach(ev => {
      eventStruct += xmlUtils.node(
       "EventStruct",
       {},
