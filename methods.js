@@ -116,7 +116,7 @@ function inform(device, event, callback) {
   let deviceId = xmlUtils.node("DeviceId", {}, [manufacturer, oui, productClass, serialNumber]);
   let eventStruct = "";
   let splitEvents = [];
-  if(event.includes(",")){
+  if(event !== null){
     splitEvents = event.split(",");
   }
   else{
