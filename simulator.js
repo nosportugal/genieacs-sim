@@ -80,7 +80,7 @@ function sendRequest(xml, callback) {
 
       if (Math.floor(response.statusCode / 100) !== 2) {
         throw new Error(
-          `Unexpected response Code ${response.statusCode}: ${body}`
+          `Unexpected response Code from ACS ${response.statusCode}: ${body}`
         );
       }
 
@@ -103,17 +103,23 @@ function sendRequest(xml, callback) {
   return request.end(body);
 }
 
-function startSession(event) {
+function startSession(event) { // called automatically after a timeout or when a connection request is received from GENIEACS (PING)
     nextInformTimeout = null;
     pendingInform = false;
     const requestId = Math.random().toString(36).slice(-8);
+    let xml = null;
     methods.inform(device, event, function (body) {
-      if(acceptConnections){
-      let xml = createSoapDocument(requestId, body);
+      if (!acceptConnections) {
+        console.log(`Simulator is not accepting connections, waiting for ${timeout} milliseconds`);
+        // Respond with a TR-069 Fault code (e.g., 9002 "Internal error")
+        let faultBody = createFaultResponse(9002, "Device not ready to accept requests");
+        xml = createSoapDocument(requestId, faultBody);
+      }else{
+        xml = createSoapDocument(requestId, body);
+      }
       sendRequest(xml, function (xml) {
-          cpeRequest();
+          cpeRequest(xml);
       });
-    }
     });
 }
 
@@ -138,23 +144,31 @@ function createFaultResponse(code, message) {
 }
 
 
-function cpeRequest() {
-  if(acceptConnections){
-    const pending = methods.getPending();
-    if (!pending) {
-      sendRequest(null, function (xml) {
-        handleMethod(xml);
-      });
-      return;
-    }
-    const requestId = Math.random().toString(36).slice(-8);
-    pending(function (body, callback) {
-      let xml = createSoapDocument(requestId, body);
-      sendRequest(xml, function (xml) {
-          callback(xml, cpeRequest);
-      });
+function cpeRequest(xml) {
+  let [requestId, ] = getRequestIdAndBody(xml);
+  if (!acceptConnections) {
+    console.log(`Simulator is not accepting connections, waiting for ${timeout} milliseconds`);
+    // Respond with a TR-069 Fault code (e.g., 9002 "Internal error")
+    let faultBody = createFaultResponse(9002, "Device not ready to accept requests");
+    let xml = createSoapDocument(requestId, faultBody);
+    sendRequest(xml, function () {
+      handleMethod(xml);
     });
+    return;
   }
+  const pending = methods.getPending();
+  if (!pending) {
+    sendRequest(null, function (xml) {
+      handleMethod(xml);
+    });
+    return;
+  }
+  pending(function (body, callback) {
+    let xml = createSoapDocument(requestId, body);
+    sendRequest(xml, function (xml) {
+        callback(xml);
+    });
+  });
 }
 
 
@@ -168,32 +182,13 @@ function handleMethod(xml) {
       informInterval = parseInt(device["InternetGatewayDevice.ManagementServer.PeriodicInformInterval"][1]);
 
     nextInformTimeout = setTimeout(function () {
-      startSession();
+      startSession(null); //3 SCHEDULED
     }, pendingInform ? 0 : 1000 * informInterval);
 
     return;
   }
 
-  let headerElement, bodyElement;
-  let envelope = xml.children[0];
-  for (const c of envelope.children) {
-    switch (c.localName) {
-      case "Header":
-        headerElement = c;
-        break;
-      case "Body":
-        bodyElement = c;
-        break;
-    }
-  }
-
-  let requestId;
-  for (let c of headerElement.children) {
-    if (c.localName === "ID") {
-      requestId = xmlParser.decodeEntities(c.text);
-      break;
-    }
-  }
+  let [requestId, bodyElement] = getRequestIdAndBody(xml);
 
   let requestElement;
   for (let c of bodyElement.children) {
@@ -321,6 +316,30 @@ function updateParameter(parameter, value) {
   if(device[parameter]){
     device[parameter][1] = value
   }
+}
+
+function getRequestIdAndBody(xml) {
+  let headerElement, bodyElement;
+  let envelope = xml.children[0];
+  for (const c of envelope.children) {
+    switch (c.localName) {
+      case "Header":
+        headerElement = c;
+        break;
+      case "Body":
+        bodyElement = c;
+        break;
+    }
+  }
+
+  let requestId;
+  for (let c of headerElement.children) {
+    if (c.localName === "ID") {
+      requestId = xmlParser.decodeEntities(c.text);
+      break;
+    }
+  }
+  return [requestId, bodyElement];
 }
 
 exports.start = start;
