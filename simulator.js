@@ -109,14 +109,7 @@ function startSession(event) { // called automatically after a timeout or when a
     const requestId = Math.random().toString(36).slice(-8);
     let xml = null;
     methods.inform(device, event, function (body) {
-      if (!acceptConnections) {
-        console.log(`Simulator is not accepting connections, waiting for ${timeout} milliseconds`);
-        // Respond with a TR-069 Fault code (e.g., 9002 "Internal error")
-        let faultBody = createFaultResponse(9002, "Device not ready to accept requests");
-        xml = createSoapDocument(requestId, faultBody);
-      }else{
-        xml = createSoapDocument(requestId, body);
-      }
+      xml = createSoapDocument(requestId, body);
       sendRequest(xml, function (xml) {
           cpeRequest(xml);
       });
@@ -234,6 +227,11 @@ function listenForConnectionRequests(serialNumber, acsUrlOptions, callback) {
     .on("close", () => {
       const connectionRequestUrl = `http://${ip}:${port}/`;
       const httpServer = http.createServer((_req, res) => {
+        if (!acceptConnections) {
+          console.log(`Simulator is rebooting, refusing connection request.`);
+          _req.socket.destroy(); // Immediately close the connection
+          return;
+        }
         console.log(`Simulator ${serialNumber} got connection request`);
         res.end();
         // A session is ongoing when nextInformTimeout === null
