@@ -137,8 +137,8 @@ function createFaultResponse(code, message) {
 }
 
 
-function cpeRequest(xml) {
-  let [requestId, ] = getRequestIdAndBody(xml);
+function cpeRequest(requestXml) {
+  let [requestId, ] = getRequestIdAndBody(requestXml);
   if (!acceptConnections) {
     console.log(`Simulator is not accepting connections, waiting for ${timeout} milliseconds`);
     // Respond with a TR-069 Fault code (e.g., 9002 "Internal error")
