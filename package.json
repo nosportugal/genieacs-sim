@@ -22,7 +22,7 @@
   },
   "homepage": "https://genieacs.com",
   "engines": {
-    "node": ">=6.9.2 <7.0"
+    "node": ">=18 <23"
   },
   "dependencies": {
     "commander": "^2.9.0"

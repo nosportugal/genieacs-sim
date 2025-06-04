@@ -1,0 +1,23 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Launch Program",
+      "program": "${workspaceFolder}/genieacs-sim",
+      "runtimeArgs": ["--inspect"],
+      "console": "integratedTerminal",
+    //   "env": {
+    //     "ACS_URL":"http://172.19.0.8:7547/",
+    //     "DATA_MODEL":"./data_model_202BC1-BM632w-8KA8WA1151100043.csv",
+    //     "SERIAL_NUMBER":"0",
+    //     "MAC_ADDRESS":"20:2B:C1:E0:69:70",
+    //     "DEFAULT_TIMEOUT":"10000"
+    //   },
+    },
+  ]
+}

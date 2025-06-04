@@ -15,6 +15,13 @@ if (!cluster.isPrimary) {
   const defaultTimeout = process.env["DEFAULT_TIMEOUT"];
 
   let device;
+  console.log("Environment variables:", {
+    ACS_URL: acsUrl,
+    DATA_MODEL: dataModel,
+    SERIAL_NUMBER: serialNumber,
+    MAC_ADDRESS: macAddress,
+    DEFAULT_TIMEOUT: defaultTimeout
+  });
   const data = fs.readFileSync(dataModel);
   if (path.parse(dataModel).ext.toLowerCase() === '.csv') {
     const rows = csvParser.reduce(csvParser.parseCsv(data.toString()));
@@ -47,7 +54,7 @@ function resolvePath(p) {
 const program = require("commander")
   .version(pkg.version)
   .description(pkg.description)
-  .option("-u, --acs-url [url]", "ACS URL to contact (default: http://127.0.0.1:7547/)", "http://127.0.0.1:7547/")
+  .option("-u, --acs-url [url]", "ACS URL to contact (default: http://127.0.0.1:7547/)", "http://172.19.0.8:7547/")
   .option("-m, --data-model [filename]", "Data model template", resolvePath, "./data_model_202BC1-BM632w-8KA8WA1151100043.csv")
   .option("-p, --processes [count]", "Number of devices to simulate (default: 1)", parseFloat, 1)
   .option("-w, --wait [milliseconds]", "Waiting period between process spawning (default: 1000)", parseFloat, 1000)
