@@ -1005,3 +1005,4 @@ InternetGatewayDevice.X_HUAWEI_SyslogConfig.MainServer,false,true,,xsd:string
 InternetGatewayDevice.X_HUAWEI_SyslogConfig.MainServerPort,false,true,514,xsd:unsignedInt
 InternetGatewayDevice.X_HUAWEI_SyslogConfig.MinorServer,false,true,,xsd:string
 InternetGatewayDevice.X_HUAWEI_SyslogConfig.MinorServerPort,false,true,514,xsd:unsignedInt
+Downloads.0.FileName,false,true,,xsd:string
