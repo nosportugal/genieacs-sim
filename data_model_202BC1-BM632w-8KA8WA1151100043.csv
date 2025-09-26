@@ -367,7 +367,7 @@ InternetGatewayDevice.ManagementServer.ConnectionRequestPassword,false,true,69t0
 InternetGatewayDevice.ManagementServer.ConnectionRequestURL,false,false,http://127.0.0.1:57543/,xsd:string
 InternetGatewayDevice.ManagementServer.ConnectionRequestUsername,false,true,202BC1-BM632w-000000,xsd:string
 InternetGatewayDevice.ManagementServer.ParameterKey,false,false,,xsd:string
-InternetGatewayDevice.ManagementServer.Password,false,true,,xsd:string
+InternetGatewayDevice.ManagementServer.Password,false,true,dummy,xsd:string
 InternetGatewayDevice.ManagementServer.PeriodicInformEnable,false,true,true,xsd:boolean
 InternetGatewayDevice.ManagementServer.PeriodicInformInterval,false,true,300,xsd:unsignedInt
 InternetGatewayDevice.ManagementServer.URL,false,true,http://192.168.1.6:7547,xsd:string
