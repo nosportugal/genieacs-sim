@@ -154,22 +154,37 @@ function inform(device, event, callback) {
     "soap-enc:arrayType": `cwmp:ParameterValueStruct[${INFORM_PARAMS.length}]`
   }, params);
 
-  let inform = xmlUtils.node("cwmp:Inform", {}, [
+  let informChildren = [
     deviceId,
     evnt,
     xmlUtils.node("MaxEnvelopes", {}, "1"),
     xmlUtils.node("CurrentTime", {}, new Date().toISOString()),
     xmlUtils.node("RetryCount", {}, "0"),
     parameterList
-  ]);
+  ];
+
+  // Check if there are pending transfers to send as TransferComplete (file download or upload or firmware upgrade)
+  const pendingTransfer = getPendingTransfers();
+  if (pendingTransfer) {
+    const transferComplete = xmlUtils.node("cwmp:TransferComplete", {}, [
+      xmlUtils.node("CommandKey", {}, xmlParser.encodeEntities(pendingTransfer.commandKey || "")),
+      xmlUtils.node("FaultCode", {}, pendingTransfer.faultCode),
+      xmlUtils.node("FaultString", {}, xmlParser.encodeEntities(pendingTransfer.faultString || "")),
+      xmlUtils.node("StartTime", {}, pendingTransfer.startTime.toISOString()),
+      xmlUtils.node("CompleteTime", {}, new Date().toISOString())
+    ]);
+    informChildren.push(transferComplete);
+  }
+
+  let inform = xmlUtils.node("cwmp:Inform", {}, informChildren);
 
   return callback(inform);
 }
 
-const pending = [];
+const pendingTransfers = [];
 
-function getPending() {
-  return pending.shift();
+function getPendingTransfers() {
+  return pendingTransfers.shift();
 }
 
 
@@ -389,24 +404,14 @@ function Download(device, request, callback) {
   }
 
   const startTime = new Date();
-  pending.push(
-    function(callback) {
-      let fault = xmlUtils.node("FaultStruct", {}, [
-        xmlUtils.node("FaultCode", {}, faultCode),
-        xmlUtils.node("FaultString", {}, xmlParser.encodeEntities(faultString))
-      ]);
-      let request = xmlUtils.node("cwmp:TransferComplete", {}, [
-        xmlUtils.node("CommandKey", {}, commandKey),
-        xmlUtils.node("StartTime", {}, startTime.toISOString()),
-        xmlUtils.node("CompleteTime", {}, new Date().toISOString()),
-        fault
-      ]);
-
-      callback(request, function(xml, callback) {
-        callback();
-      });
-    }
-  );
+  
+  // Store transfer info to be sent later as TransferComplete in next Inform
+  pendingTransfers.push({
+    commandKey: commandKey,
+    startTime: startTime,
+    faultCode: faultCode,
+    faultString: faultString
+  });
 
   let response = xmlUtils.node("cwmp:DownloadResponse", {}, [
     xmlUtils.node("Status", {}, "1"),
@@ -435,7 +440,7 @@ function FactoryReset(device, request, callback) {
 }
 
 exports.inform = inform;
-exports.getPending = getPending;
+exports.getPendingTransfers = getPendingTransfers;
 exports.GetParameterNames = GetParameterNames;
 exports.GetParameterValues = GetParameterValues;
 exports.SetParameterValues = SetParameterValues;
