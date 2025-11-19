@@ -154,22 +154,40 @@ function inform(device, event, callback) {
     "soap-enc:arrayType": `cwmp:ParameterValueStruct[${INFORM_PARAMS.length}]`
   }, params);
 
-  let inform = xmlUtils.node("cwmp:Inform", {}, [
+  let informChildren = [
     deviceId,
     evnt,
     xmlUtils.node("MaxEnvelopes", {}, "1"),
     xmlUtils.node("CurrentTime", {}, new Date().toISOString()),
     xmlUtils.node("RetryCount", {}, "0"),
     parameterList
-  ]);
+  ];
+
+  // Check if there are pending transfers to send as TransferComplete (file download or upload or firmware upgrade)
+  const pendingTransfer = getPendingTransfers();
+  if (pendingTransfer) {
+    const fault = xmlUtils.node("FaultStruct", {}, [
+      xmlUtils.node("FaultCode", {}, pendingTransfer.faultCode),
+      xmlUtils.node("FaultString", {}, xmlParser.encodeEntities(pendingTransfer.faultString || ""))
+    ]);
+    const transferComplete = xmlUtils.node("cwmp:TransferComplete", {}, [
+      xmlUtils.node("CommandKey", {}, xmlParser.encodeEntities(pendingTransfer.commandKey || "")),
+      xmlUtils.node("StartTime", {}, pendingTransfer.startTime.toISOString()),
+      xmlUtils.node("CompleteTime", {}, new Date().toISOString()),
+      fault
+    ]);
+    informChildren.push(transferComplete);
+  }
+
+  let inform = xmlUtils.node("cwmp:Inform", {}, informChildren);
 
   return callback(inform);
 }
 
-const pending = [];
+const pendingTransfers = [];
 
-function getPending() {
-  return pending.shift();
+function getPendingTransfers() {
+  return pendingTransfers.shift();
 }
 
 
@@ -350,64 +368,18 @@ function Download(device, request, callback) {
     }
   }
 
-  let faultCode = "9010";
-  let faultString = "Download timeout";
-
-  if (url.startsWith("http://")) {
-    http.get(url, (res) => {
-      res.on("end", () => {
-        if (res.statusCode === 200) {
-          faultCode = "0";
-          faultString = "";
-        }
-        else {
-          faultCode = "9016";
-          faultString = `Unexpected response ${res.statusCode}`;
-        }
-      });
-      res.resume();
-    }).on("error", (err) => {
-      faultString = err.message;
-    });
-  }
-  else if (url.startsWith("https://")) {
-    https.get(url, (res) => {
-      res.on("end", () => {
-        if (res.statusCode === 200) {
-          faultCode = "0";
-          faultString = "";
-        }
-        else {
-          faultCode = "9016";
-          faultString = `Unexpected response ${res.statusCode}`;
-        }
-      });
-      res.resume();
-    }).on("error", (err) => {
-      faultString = err.message;
-    });
-  }
-
   const startTime = new Date();
-  pending.push(
-    function(callback) {
-      let fault = xmlUtils.node("FaultStruct", {}, [
-        xmlUtils.node("FaultCode", {}, faultCode),
-        xmlUtils.node("FaultString", {}, xmlParser.encodeEntities(faultString))
-      ]);
-      let request = xmlUtils.node("cwmp:TransferComplete", {}, [
-        xmlUtils.node("CommandKey", {}, commandKey),
-        xmlUtils.node("StartTime", {}, startTime.toISOString()),
-        xmlUtils.node("CompleteTime", {}, new Date().toISOString()),
-        fault
-      ]);
 
-      callback(request, function(xml, callback) {
-        callback();
-      });
-    }
-  );
+  // Validate and start download
+  if (url.startsWith("http://")) {
+    downloadFile(commandKey, startTime, url, http);
+  } else if (url.startsWith("https://")) {
+    downloadFile(commandKey, startTime, url, https);
+  } else {
+    queueTransferComplete(commandKey, startTime,"9016", "Invalid URL scheme");
+  }
 
+  // Send immediate response
   let response = xmlUtils.node("cwmp:DownloadResponse", {}, [
     xmlUtils.node("Status", {}, "1"),
     xmlUtils.node("StartTime", {}, "0001-01-01T00:00:00Z"),
@@ -415,6 +387,45 @@ function Download(device, request, callback) {
   ]);
 
   return callback(response);
+}
+
+// Helper function to queue transfer result
+function queueTransferComplete(commandKey, startTime, faultCode, faultString) {
+  pendingTransfers.push({
+    commandKey: commandKey,
+    startTime: startTime,
+    faultCode: faultCode,
+    faultString: faultString
+  });
+}
+
+// Download handler with timeout
+function downloadFile(commandKey, startTime, url, urlObj) {
+  const request = urlObj.get(url, (res) => {
+    let downloadedBytes = 0;
+    
+    res.on("data", (chunk) => {
+      downloadedBytes += chunk.length;
+    });
+
+    res.on("end", () => {
+      if (res.statusCode === 200) {
+        queueTransferComplete(commandKey, startTime,"0", "");
+      } else {
+        queueTransferComplete(commandKey, startTime, "9016", `Unexpected response ${res.statusCode}`);
+      }
+    });
+
+    res.resume();
+  }).on("error", (err) => {
+    queueTransferComplete(commandKey, startTime, "9010", err.message);
+  });
+
+  // Set timeout (30 seconds)
+  request.setTimeout(30000, () => {
+    request.destroy();
+    queueTransferComplete(commandKey, startTime, "9010", "Download timeout");
+  });
 }
 
 function Reboot(device, request, callback) {
@@ -435,7 +446,7 @@ function FactoryReset(device, request, callback) {
 }
 
 exports.inform = inform;
-exports.getPending = getPending;
+exports.getPendingTransfers = getPendingTransfers;
 exports.GetParameterNames = GetParameterNames;
 exports.GetParameterValues = GetParameterValues;
 exports.SetParameterValues = SetParameterValues;

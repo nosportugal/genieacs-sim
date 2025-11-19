@@ -149,18 +149,8 @@ function cpeRequest(requestXml) {
     });
     return;
   }
-  const pending = methods.getPending();
-  if (!pending) {
-    sendRequest(null, function (xml) {
-      handleMethod(xml);
-    });
-    return;
-  }
-  pending(function (body, callback) {
-    let xml = createSoapDocument(requestId, body);
-    sendRequest(xml, function (xml) {
-        callback(xml);
-    });
+  sendRequest(null, function (xml) {
+    handleMethod(xml);
   });
 }
 
