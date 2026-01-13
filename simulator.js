@@ -96,7 +96,7 @@ function sendRequest(xml, callback) {
     });
   });
 
-  request.setTimeout(parseInt(timeout)+30000, function (err) {
+  request.setTimeout(Number.parseInt(timeout)+30000, function (err) {
     throw new Error("Socket timed out");
   });
 
@@ -138,17 +138,35 @@ function createFaultResponse(code, message) {
 
 
 function cpeRequest(requestXml) {
+  // Check for empty response first (session end from ACS)
+  if (!requestXml) {
+    if (!acceptConnections) {
+      console.log(`Session ended while device unavailable`);
+      httpAgent.destroy();
+      return;
+    }
+    console.log("✓ Empty response from ACS - session ending normally");
+    handleMethod(null);
+    return;
+  }
+
+  // Now safe to parse the request
   let [requestId, ] = getRequestIdAndBody(requestXml);
+
+  // Reject requests if device is unavailable (rebooting, etc.)
   if (!acceptConnections) {
     console.log(`Simulator is not accepting connections, waiting for ${timeout} milliseconds`);
     // Respond with a TR-069 Fault code (e.g., 9002 "Internal error")
     let faultBody = createFaultResponse(9002, "Device not ready to accept requests");
     let xml = createSoapDocument(requestId, faultBody);
     sendRequest(xml, function () {
-      handleMethod(xml);
+      // Session should end
+      httpAgent.destroy();
     });
     return;
   }
+
+  // Normal flow - device is accepting connections
   sendRequest(null, function (xml) {
     handleMethod(xml);
   });
@@ -158,11 +176,43 @@ function cpeRequest(requestXml) {
 function handleMethod(xml) {
   if (!xml) {
     httpAgent.destroy();
+
+    // Check if firmware reboot is pending
+    if (device._pendingReboot && device._firmwareUpgrade) {
+      console.log(`🔄 Session ended, initiating reboot for firmware upgrade`);
+      delete device._pendingReboot;
+      delete device._firmwareUpgrade;
+      
+      const rebootTimeout = stopSession();
+      setTimeout(() => {
+        console.log(`🚀 Device booting after firmware upgrade`);
+        
+        // Update software version to simulate firmware change
+        updateParameter("Device.DeviceInfo.SoftwareVersion", "2.0.0-upgraded");
+        updateParameter("InternetGatewayDevice.DeviceInfo.SoftwareVersion", "2.0.0-upgraded");
+        
+        startSession("1 BOOT,M Download,4 VALUE CHANGE");
+      }, rebootTimeout);
+      return;
+    }
+    
+    // Check for regular reboot (non-firmware)
+    if (device._pendingReboot) {
+      console.log(`🔄 Session ended, rebooting device`);
+      delete device._pendingReboot;
+      
+      const rebootTimeout = stopSession();
+      setTimeout(() => {
+        startSession("1 BOOT,M Download");
+      }, rebootTimeout);
+      return;
+    }
+
     let informInterval = 10;
     if (device["Device.ManagementServer.PeriodicInformInterval"])
-      informInterval = parseInt(device["Device.ManagementServer.PeriodicInformInterval"][1]);
+      informInterval = Number.parseInt(device["Device.ManagementServer.PeriodicInformInterval"][1]);
     else if (device["InternetGatewayDevice.ManagementServer.PeriodicInformInterval"])
-      informInterval = parseInt(device["InternetGatewayDevice.ManagementServer.PeriodicInformInterval"][1]);
+      informInterval = Number.parseInt(device["InternetGatewayDevice.ManagementServer.PeriodicInformInterval"][1]);
 
     nextInformTimeout = setTimeout(function () {
       startSession(null); //3 SCHEDULED
@@ -291,7 +341,7 @@ function start(dataModel, serialNumber, macAddress, acsUrl, defaultTimeout) {
 
 function stopSession() {
   acceptConnections = false;
-  console.log(`Simulator Stoped listening for requests for ${timeout}`);
+  console.log(`Simulator Stopped listening for requests for ${timeout}`);
   setTimeout(() => {
     acceptConnections = true;
     console.log(`Simulator resumed listening.`);
@@ -300,9 +350,17 @@ function stopSession() {
 }
 
 function updateParameter(parameter, value) {
-  device = defaultDeviceValue;
-  if(device[parameter]){
-    device[parameter][1] = value
+  // Check if device is initialized
+  if (!device) {
+    console.error(`❌ Cannot update parameter: device not initialized`);
+    return;
+  }
+  
+  if (device[parameter]) {
+    device[parameter][1] = value;
+    console.log(`📝 Updated ${parameter} = ${value}`);
+  } else {
+    console.warn(`⚠️ Parameter ${parameter} does not exist in device model`);
   }
 }
 
