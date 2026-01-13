@@ -24,7 +24,6 @@ const INFORM_PARAMS = [
   "Device.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress",
   "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress"
 ];
-const MAX_DOWNLOAD_SIZE = 500 * 1024 * 1024; // 500MB limit for testing
 const DOWNLOAD_TIMEOUT = Number.parseInt(process.env.DOWNLOAD_TIMEOUT) || 30000;
 const validFileTypes = [
     "1 Firmware Upgrade Image",
@@ -421,7 +420,7 @@ function Download(device, request, callback) {
     if (fileType === "1 Firmware Upgrade Image") {
       device._downloadInProgress = false;
     }
-    queueTransferComplete(commandKey, startTime,"9013", "Invalid URL scheme");
+    queueTransferComplete(commandKey, startTime,"9016", "Invalid URL scheme");
     setTimeout(() => {
       sim.startSession("7 TRANSFER COMPLETE");
     }, 500);
@@ -465,22 +464,6 @@ function downloadFile(device, commandKey, startTime, url, urlObj, fileType) {
     
     res.on("data", (chunk) => {
       downloadedBytes += chunk.length;
-
-      // // Check size limit
-      // if (downloadedBytes > MAX_DOWNLOAD_SIZE) {
-      //   request.destroy();
-      //   if (fileType === "1 Firmware Upgrade Image") {
-      //     device._downloadInProgress = false;
-      //   }
-      //   delete device._activeDownloadRequest;
-        
-      //   queueTransferComplete(commandKey, startTime, "9009", 
-      //     `File size exceeds maximum allowed (${MAX_DOWNLOAD_SIZE} bytes)`);
-      //   setTimeout(() => {
-      //     sim.startSession("7 TRANSFER COMPLETE");
-      //   }, 500);
-      //   return;
-      // }
     });
 
     res.on("end", () => {
@@ -495,10 +478,6 @@ function downloadFile(device, commandKey, startTime, url, urlObj, fileType) {
       console.log(`✅ Download completed successfully`);
       queueTransferComplete(commandKey, startTime,"0", "");
 
-      // ✅ STANDARD COMPLIANT: Always start new session
-      // If a session is active, startSession will queue this
-      console.log(`📋 Starting TransferComplete session`);
-
       // Wait for TransferComplete session to complete before rebooting
       if (fileType === "1 Firmware Upgrade Image") {
         console.log(`🔄 Firmware upgrade: TransferComplete will be sent, then device will reboot`);
@@ -511,29 +490,14 @@ function downloadFile(device, commandKey, startTime, url, urlObj, fileType) {
         setTimeout(() => {
           sim.startSession("7 TRANSFER COMPLETE");
         }, 500);
-      }else{
-        console.log(`📋 Starting TransferComplete session`);
+      } else {
+        console.log(`📋 Starting TransferComplete session for non-firmware upgrade`);
         
         // For non-firmware downloads, just send TransferComplete
         setTimeout(() => {
           sim.startSession("7 TRANSFER COMPLETE");
         }, 500);
       }
-
-      // } else {
-      //   let faultCodes;
-      //   if (res.statusCode === 401 || res.statusCode === 403) {
-      //     faultCodes = "9012"; // Authentication failure
-      //   } else if (res.statusCode === 404 || res.statusCode === 410) {
-      //     faultCodes = "9016"; // File not found
-      //   } else {
-      //     faultCodes = "9010"; // General download failure
-      //   }
-
-      //   console.error(`❌ Download failed: HTTP ${res.statusCode}`);
-      //   queueTransferComplete(commandKey, startTime, faultCodes, `HTTP ${res.statusCode}`);
-      //   sim.startSession("7 TRANSFER COMPLETE");
-      // }
     });
 
     res.resume();
@@ -550,8 +514,6 @@ function downloadFile(device, commandKey, startTime, url, urlObj, fileType) {
       sim.startSession("7 TRANSFER COMPLETE");
     }, 500);
   });
-
-  requestObj = request;
 
   // Set timeout (30 seconds)
   request.setTimeout(DOWNLOAD_TIMEOUT, () => {
@@ -570,7 +532,7 @@ function downloadFile(device, commandKey, startTime, url, urlObj, fileType) {
   });
 
   // Store request so it can be cancelled by Reboot
-  device._activeDownloadRequest = requestObj;
+  device._activeDownloadRequest = request;
 }
 
 function Reboot(device, request, callback) {
@@ -599,7 +561,7 @@ function Reboot(device, request, callback) {
 
   setTimeout(function() {
     sim.startSession("1 BOOT,M Reboot,4 VALUE CHANGE");
-  }, Number.parseInt(timeout));
+  }, Number.parseInt(timeout, 10) + 10000);
 }
 
 function FactoryReset(device, request, callback) {
