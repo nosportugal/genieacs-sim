@@ -24,8 +24,9 @@ const INFORM_PARAMS = [
   "Device.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress",
   "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress"
 ];
-const downloadTimeout = Number.parseInt(process.env.DOWNLOAD_TIMEOUT) || 30000;
-const transferComplete = 500;
+const downloadTimeout = Number.parseInt(process.env.DOWNLOAD_TIMEOUT, 10) || 30000;
+const transferCompleteDelayTimeout = 500;
+const sessionFactoryResetTimeout = 500;
 const validFileTypes = [
     "1 Firmware Upgrade Image",
     "2 Web Content",
@@ -185,7 +186,7 @@ function inform(device, event, callback) {
     ];
 
     // CONDITIONALLY add FaultStruct only if there's a real fault
-    if (pendingTransfer.faultCode && pendingTransfer.faultCode !== "0") {
+    if (pendingTransfer.faultCode && pendingTransfer.faultCode !== "0" && pendingTransfer.faultCode !== "") {
       transferCompleteChildren.push(
           xmlUtils.node("FaultStruct", {}, [
           xmlUtils.node("FaultCode", {}, pendingTransfer.faultCode),
@@ -431,7 +432,7 @@ function Download(device, request, callback) {
     queueTransferComplete(commandKey, startTime,"9016", "Invalid URL scheme");
     setTimeout(() => {
       sim.startSession("7 TRANSFER COMPLETE");
-    }, transferComplete);
+    }, transferCompleteDelayTimeout);
   }
 
   // Send immediate response
@@ -453,6 +454,12 @@ function createCwmpFault(faultCode, faultString) {
 
 // Helper function to queue transfer result
 function queueTransferComplete(commandKey, startTime, faultCode, faultString) {
+  // Validate faultCode - must not be empty, null, or undefined
+  if (!faultCode || faultCode === "") {
+    console.warn("⚠️ Invalid/empty faultCode provided, defaulting to '0' (success)");
+    faultCode = "0";
+  }
+  
   pendingTransfers.push({
     commandKey: commandKey,
     startTime: startTime,
@@ -496,14 +503,14 @@ function downloadFile(device, commandKey, startTime, url, urlObj, fileType) {
         // Start TransferComplete session
         setTimeout(() => {
           sim.startSession("7 TRANSFER COMPLETE");
-        }, transferComplete);
+        }, transferCompleteDelayTimeout);
       } else {
         console.log(`📋 Starting TransferComplete session for non-firmware upgrade`);
         
         // For non-firmware downloads, just send TransferComplete
         setTimeout(() => {
           sim.startSession("7 TRANSFER COMPLETE");
-        }, transferComplete);
+        }, transferCompleteDelayTimeout);
       }
     });
 
@@ -519,7 +526,7 @@ function downloadFile(device, commandKey, startTime, url, urlObj, fileType) {
     
     setTimeout(() => {
       sim.startSession("7 TRANSFER COMPLETE");
-    }, transferComplete);
+    }, transferCompleteDelayTimeout);
   });
 
   // Set timeout (30 seconds)
@@ -535,7 +542,7 @@ function downloadFile(device, commandKey, startTime, url, urlObj, fileType) {
     
     setTimeout(() => {
       sim.startSession("7 TRANSFER COMPLETE");
-    }, transferComplete);
+    }, transferCompleteDelayTimeout);
   });
 
   // Store request so it can be cancelled by Reboot
@@ -568,14 +575,14 @@ function Reboot(device, request, callback) {
 
   setTimeout(function() {
     sim.startSession("1 BOOT,M Reboot,4 VALUE CHANGE");
-  }, Number.parseInt(timeout) + 10000);
+  }, Number.parseInt(timeout, 10) + 10000);
 }
 
 function FactoryReset(device, request, callback) {
   let response = xmlUtils.node("cwmp:FactoryResetResponse", {}, "");
   callback(response);
   setTimeout(function(){process.kill(process.pid);
-  },transferComplete);
+  },sessionFactoryResetTimeout);
 }
 
 exports.inform = inform;

@@ -96,7 +96,7 @@ function sendRequest(xml, callback) {
     });
   });
 
-  request.setTimeout(Number.parseInt(timeout)+30000, function (err) {
+  request.setTimeout(Number.parseInt(timeout, 10)+30000, function (err) {
     throw new Error("Socket timed out");
   });
 
@@ -216,9 +216,9 @@ function handleMethod(xml) {
 
     let informInterval = 10;
     if (device["Device.ManagementServer.PeriodicInformInterval"])
-      informInterval = Number.parseInt(device["Device.ManagementServer.PeriodicInformInterval"][1]);
+      informInterval = Number.parseInt(device["Device.ManagementServer.PeriodicInformInterval"][1], 10);
     else if (device["InternetGatewayDevice.ManagementServer.PeriodicInformInterval"])
-      informInterval = Number.parseInt(device["InternetGatewayDevice.ManagementServer.PeriodicInformInterval"][1]);
+      informInterval = Number.parseInt(device["InternetGatewayDevice.ManagementServer.PeriodicInformInterval"][1], 10);
 
     nextInformTimeout = setTimeout(function () {
       startSession(null); //3 SCHEDULED
@@ -306,6 +306,17 @@ function start(dataModel, serialNumber, macAddress, acsUrl, defaultTimeout) {
   timeout = defaultTimeout;
   device = dataModel;
   defaultDeviceValue = dataModel;
+  
+  // Clean up any temporary state flags from previous runs
+  // These flags are used for async operations and should not persist across restarts
+  delete device._pendingReboot;
+  delete device._firmwareUpgrade;
+  delete device._transferCompleteSession;
+  delete device._downloadInProgress;
+  delete device._activeDownloadRequest;
+  delete device._cookie;
+  delete device._sortedPaths;
+  
   if (device["DeviceID.SerialNumber"])
     device["DeviceID.SerialNumber"][1] = serialNumber;
   if (device["Device.DeviceInfo.SerialNumber"])
