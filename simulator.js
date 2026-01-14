@@ -314,8 +314,8 @@ function start(dataModel, serialNumber, macAddress, acsUrl, defaultTimeout) {
   delete device._transferCompleteSession;
   delete device._downloadInProgress;
   delete device._activeDownloadRequest;
-  delete device._cookie;
-  delete device._sortedPaths;
+  // delete device._cookie;
+  // delete device._sortedPaths;
   
   if (device["DeviceID.SerialNumber"])
     device["DeviceID.SerialNumber"][1] = serialNumber;
