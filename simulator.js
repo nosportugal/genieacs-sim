@@ -177,11 +177,12 @@ function handleMethod(xml) {
   if (!xml) {
     httpAgent.destroy();
 
-    // Check if firmware reboot is pending
-    if (device._pendingReboot && device._firmwareUpgrade) {
-      console.log(`🔄 Session ended, initiating reboot for firmware upgrade`);
+    // Check if firmware reboot is pending AND we're ending a TransferComplete session
+    if (device._pendingReboot && device._firmwareUpgrade && device._transferCompleteSession) {
+      console.log(`🔄 TransferComplete session ended, initiating reboot for firmware upgrade`);
       delete device._pendingReboot;
       delete device._firmwareUpgrade;
+      delete device._transferCompleteSession;
       
       const rebootTimeout = stopSession();
       setTimeout(() => {
@@ -196,6 +197,11 @@ function handleMethod(xml) {
       return;
     }
     
+    // Clear TransferComplete session flag if set (for non-firmware transfers)
+    if (device._transferCompleteSession) {
+      delete device._transferCompleteSession;
+    }
+    
     // Check for regular reboot (non-firmware)
     if (device._pendingReboot) {
       console.log(`🔄 Session ended, rebooting device`);
@@ -203,7 +209,7 @@ function handleMethod(xml) {
       
       const rebootTimeout = stopSession();
       setTimeout(() => {
-        startSession("1 BOOT,M Download");
+        startSession("1 BOOT,M Reboot");
       }, rebootTimeout);
       return;
     }
