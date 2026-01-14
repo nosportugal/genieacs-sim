@@ -24,9 +24,9 @@ const INFORM_PARAMS = [
   "Device.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress",
   "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress"
 ];
-const downloadTimeout = Number.parseInt(process.env.DOWNLOAD_TIMEOUT, 10) || 30000;
-const transferCompleteDelayTimeout = 500;
-const sessionFactoryResetTimeout = 500;
+const downloadTimeoutMs = Number.parseInt(process.env.DOWNLOAD_TIMEOUT, 10) || 30000;
+const transferCompleteDelayMs = 500;
+const sessionFactoryResetDelayMs = 500;
 const validFileTypes = [
     "1 Firmware Upgrade Image",
     "2 Web Content",
@@ -432,7 +432,7 @@ function Download(device, request, callback) {
     queueTransferComplete(commandKey, startTime,"9016", "Invalid URL scheme");
     setTimeout(() => {
       sim.startSession("7 TRANSFER COMPLETE");
-    }, transferCompleteDelayTimeout);
+    }, transferCompleteDelayMs);
   }
 
   // Send immediate response
@@ -490,7 +490,7 @@ function downloadFile(device, commandKey, startTime, url, urlObj, fileType) {
       
       // if (res.statusCode === 200) {
       console.log(`✅ Download completed successfully`);
-      queueTransferComplete(commandKey, startTime,"0", "");
+      queueTransferComplete(commandKey, startTime, "0", "");
 
       // Wait for TransferComplete session to complete before rebooting
       if (fileType === "1 Firmware Upgrade Image") {
@@ -503,14 +503,14 @@ function downloadFile(device, commandKey, startTime, url, urlObj, fileType) {
         // Start TransferComplete session
         setTimeout(() => {
           sim.startSession("7 TRANSFER COMPLETE");
-        }, transferCompleteDelayTimeout);
+        }, transferCompleteDelayMs);
       } else {
         console.log(`📋 Starting TransferComplete session for non-firmware upgrade`);
         
         // For non-firmware downloads, just send TransferComplete
         setTimeout(() => {
           sim.startSession("7 TRANSFER COMPLETE");
-        }, transferCompleteDelayTimeout);
+        }, transferCompleteDelayMs);
       }
     });
 
@@ -526,23 +526,23 @@ function downloadFile(device, commandKey, startTime, url, urlObj, fileType) {
     
     setTimeout(() => {
       sim.startSession("7 TRANSFER COMPLETE");
-    }, transferCompleteDelayTimeout);
+    }, transferCompleteDelayMs);
   });
 
   // Set timeout (30 seconds)
-  request.setTimeout(downloadTimeout, () => {
+  request.setTimeout(downloadTimeoutMs, () => {
     request.destroy();
     if (fileType === "1 Firmware Upgrade Image") {
       device._downloadInProgress = false;
     }
     delete device._activeDownloadRequest;
 
-    console.error(`❌ Download timeout after ${downloadTimeout}ms`);
+    console.error(`❌ Download timeout after ${downloadTimeoutMs}ms`);
     queueTransferComplete(commandKey, startTime, "9010", "Download timeout");
     
     setTimeout(() => {
       sim.startSession("7 TRANSFER COMPLETE");
-    }, transferCompleteDelayTimeout);
+    }, transferCompleteDelayMs);
   });
 
   // Store request so it can be cancelled by Reboot
@@ -581,8 +581,8 @@ function Reboot(device, request, callback) {
 function FactoryReset(device, request, callback) {
   let response = xmlUtils.node("cwmp:FactoryResetResponse", {}, "");
   callback(response);
-  setTimeout(function(){process.kill(process.pid);
-  },sessionFactoryResetTimeout);
+  setTimeout(function() {process.kill(process.pid);
+  },sessionFactoryResetDelayMs);
 }
 
 exports.inform = inform;

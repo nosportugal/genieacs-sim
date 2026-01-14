@@ -313,9 +313,7 @@ function start(dataModel, serialNumber, macAddress, acsUrl, defaultTimeout) {
   delete device._firmwareUpgrade;
   delete device._transferCompleteSession;
   delete device._downloadInProgress;
-  delete device._activeDownloadRequest;
-  // delete device._cookie;
-  // delete device._sortedPaths;
+  device._activeDownloadRequest = null;
   
   if (device["DeviceID.SerialNumber"])
     device["DeviceID.SerialNumber"][1] = serialNumber;
