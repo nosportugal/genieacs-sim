@@ -1,7 +1,7 @@
 "use strict";
 
-const http = require("http");
-const https = require("https");
+const http = require("node:http");
+const https = require("node:https");
 const xmlParser = require("./xml-parser");
 const xmlUtils = require("./xml-utils");
 const sim = require("./simulator");
@@ -24,7 +24,16 @@ const INFORM_PARAMS = [
   "Device.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress",
   "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress"
 ];
-
+const downloadTimeoutMs = Number.parseInt(process.env.DOWNLOAD_TIMEOUT, 10) || 30000;
+const transferCompleteDelayMs = 500;
+const sessionFactoryResetDelayMs = 500;
+const validFileTypes = [
+    "1 Firmware Upgrade Image",
+    "2 Web Content",
+    "3 Vendor Configuration File",
+    "4 Tone File",
+    "5 Ringer File"
+  ];
 
 function inform(device, event, callback) {
   let manufacturer = "";
@@ -166,17 +175,32 @@ function inform(device, event, callback) {
   // Check if there are pending transfers to send as TransferComplete (file download or upload or firmware upgrade)
   const pendingTransfer = getPendingTransfers();
   if (pendingTransfer) {
-    const fault = xmlUtils.node("FaultStruct", {}, [
-      xmlUtils.node("FaultCode", {}, pendingTransfer.faultCode),
-      xmlUtils.node("FaultString", {}, xmlParser.encodeEntities(pendingTransfer.faultString || ""))
-    ]);
-    const transferComplete = xmlUtils.node("cwmp:TransferComplete", {}, [
+    // Mark this as a TransferComplete session
+    device._transferCompleteSession = true;
+    
+    // Start with required elements only
+    const transferCompleteChildren = [
       xmlUtils.node("CommandKey", {}, xmlParser.encodeEntities(pendingTransfer.commandKey || "")),
       xmlUtils.node("StartTime", {}, pendingTransfer.startTime.toISOString()),
-      xmlUtils.node("CompleteTime", {}, new Date().toISOString()),
-      fault
-    ]);
+      xmlUtils.node("CompleteTime", {}, new Date().toISOString())
+    ];
+
+    // CONDITIONALLY add FaultStruct only if there's a real fault
+    if (pendingTransfer.faultCode && pendingTransfer.faultCode !== "0" && pendingTransfer.faultCode !== "") {
+      transferCompleteChildren.push(
+          xmlUtils.node("FaultStruct", {}, [
+          xmlUtils.node("FaultCode", {}, pendingTransfer.faultCode),
+          xmlUtils.node("FaultString", {}, xmlParser.encodeEntities(pendingTransfer.faultString || ""))
+        ])
+      );
+    }
+
+    const transferComplete = xmlUtils.node("cwmp:TransferComplete", {}, transferCompleteChildren);
     informChildren.push(transferComplete);
+    
+    if (device._pendingReboot) {
+      console.log(`⏳ TransferComplete sent, reboot will occur after session ends`);
+    }
   }
 
   let inform = xmlUtils.node("cwmp:Inform", {}, informChildren);
@@ -193,7 +217,7 @@ function getPendingTransfers() {
 
 function getSortedPaths(device) {
   if (device._sortedPaths) return device._sortedPaths;
-  const ignore = new Set(["DeviceID", "Downloads", "Tags", "Events", "Reboot", "FactoryReset", "VirtalParameters"]);
+  const ignore = new Set(["DeviceID", "Downloads", "Tags", "Events", "Reboot", "FactoryReset", "VirtualParameters"]);
   device._sortedPaths = Object.keys(device).filter(p => p[0] !== "_" && !ignore.has(p.split(".")[0])).sort();
   return device._sortedPaths;
 }
@@ -356,7 +380,8 @@ function DeleteObject(device, request, callback) {
 
 
 function Download(device, request, callback) {
-  let commandKey, url;
+  let commandKey, url, fileType;
+
   for (let c of request.children) {
     switch (c.name) {
       case "CommandKey":
@@ -365,18 +390,49 @@ function Download(device, request, callback) {
       case "URL":
         url = xmlParser.decodeEntities(c.text);
         break;
+      case "FileType":
+        fileType = xmlParser.decodeEntities(c.text);
+        break;
     }
   }
 
+  // Check if FileType is missing
+  if (!fileType) {
+    console.log("❌ Download rejected: FileType parameter is required");
+    return callback(createCwmpFault("9003", "Invalid arguments - FileType is required"));
+  }
+  // Check if FileType is invalid
+  if (!validFileTypes.includes(fileType)) {
+    console.log(`❌ Download rejected: Invalid FileType '${fileType}'`);
+    return callback(createCwmpFault("9003", `Invalid arguments - FileType '${fileType}' not supported`));
+  }
+
+
   const startTime = new Date();
+
+  // Block concurrent firmware downloads
+  if (fileType === "1 Firmware Upgrade Image") {
+    if (device._downloadInProgress) {
+      console.log("❌ Download rejected: Firmware download already in progress");
+      return callback(createCwmpFault("9010", "File transfer already in progress"));
+    }
+    device._downloadInProgress = true;
+  }
 
   // Validate and start download
   if (url.startsWith("http://")) {
-    downloadFile(commandKey, startTime, url, http);
+    downloadFile(device, commandKey, startTime, url, http, fileType);
   } else if (url.startsWith("https://")) {
-    downloadFile(commandKey, startTime, url, https);
+    downloadFile(device, commandKey, startTime, url, https, fileType);
   } else {
+    // Invalid URL scheme detected
+    if (fileType === "1 Firmware Upgrade Image") {
+      device._downloadInProgress = false;
+    }
     queueTransferComplete(commandKey, startTime,"9016", "Invalid URL scheme");
+    setTimeout(() => {
+      sim.startSession("7 TRANSFER COMPLETE");
+    }, transferCompleteDelayMs);
   }
 
   // Send immediate response
@@ -389,8 +445,21 @@ function Download(device, request, callback) {
   return callback(response);
 }
 
+function createCwmpFault(faultCode, faultString) {
+  return xmlUtils.node("cwmp:Fault", {}, [
+    xmlUtils.node("FaultCode", {}, String(faultCode)),
+    xmlUtils.node("FaultString", {}, xmlParser.encodeEntities(faultString))
+  ]);
+}
+
 // Helper function to queue transfer result
 function queueTransferComplete(commandKey, startTime, faultCode, faultString) {
+  // Validate faultCode - must not be empty, null, or undefined
+  if (!faultCode || faultCode === "") {
+    console.warn("⚠️ Invalid/empty faultCode provided, defaulting to '0' (success)");
+    faultCode = "0";
+  }
+  
   pendingTransfers.push({
     commandKey: commandKey,
     startTime: startTime,
@@ -400,7 +469,10 @@ function queueTransferComplete(commandKey, startTime, faultCode, faultString) {
 }
 
 // Download handler with timeout
-function downloadFile(commandKey, startTime, url, urlObj) {
+function downloadFile(device, commandKey, startTime, url, urlObj, fileType) {
+
+  console.log(`📥 Download started: ${url}`);
+  
   const request = urlObj.get(url, (res) => {
     let downloadedBytes = 0;
     
@@ -409,40 +481,108 @@ function downloadFile(commandKey, startTime, url, urlObj) {
     });
 
     res.on("end", () => {
-      if (res.statusCode === 200) {
-        queueTransferComplete(commandKey, startTime,"0", "");
+      if (fileType === "1 Firmware Upgrade Image") {
+        device._downloadInProgress = false;
+      }
+
+      // Clean up request reference
+      delete device._activeDownloadRequest;
+      
+      // if (res.statusCode === 200) {
+      console.log(`✅ Download completed successfully`);
+      queueTransferComplete(commandKey, startTime, "0", "");
+
+      // Wait for TransferComplete session to complete before rebooting
+      if (fileType === "1 Firmware Upgrade Image") {
+        console.log(`🔄 Firmware upgrade: TransferComplete will be sent, then device will reboot`);
+        
+        // Set a flag to trigger reboot after TransferComplete
+        device._pendingReboot = true;
+        device._firmwareUpgrade = true;
+
+        // Start TransferComplete session
+        setTimeout(() => {
+          sim.startSession("7 TRANSFER COMPLETE");
+        }, transferCompleteDelayMs);
       } else {
-        queueTransferComplete(commandKey, startTime, "9016", `Unexpected response ${res.statusCode}`);
+        console.log(`📋 Starting TransferComplete session for non-firmware upgrade`);
+        
+        // For non-firmware downloads, just send TransferComplete
+        setTimeout(() => {
+          sim.startSession("7 TRANSFER COMPLETE");
+        }, transferCompleteDelayMs);
       }
     });
 
     res.resume();
   }).on("error", (err) => {
+    if (fileType === "1 Firmware Upgrade Image") {
+      device._downloadInProgress = false;
+    }
+    delete device._activeDownloadRequest;
+
+    console.error(`❌ Network error: ${err.message}`);
     queueTransferComplete(commandKey, startTime, "9010", err.message);
+    
+    setTimeout(() => {
+      sim.startSession("7 TRANSFER COMPLETE");
+    }, transferCompleteDelayMs);
   });
 
   // Set timeout (30 seconds)
-  request.setTimeout(30000, () => {
+  request.setTimeout(downloadTimeoutMs, () => {
     request.destroy();
+    if (fileType === "1 Firmware Upgrade Image") {
+      device._downloadInProgress = false;
+    }
+    delete device._activeDownloadRequest;
+
+    console.error(`❌ Download timeout after ${downloadTimeoutMs}ms`);
     queueTransferComplete(commandKey, startTime, "9010", "Download timeout");
+    
+    setTimeout(() => {
+      sim.startSession("7 TRANSFER COMPLETE");
+    }, transferCompleteDelayMs);
   });
+
+  // Store request so it can be cancelled by Reboot
+  device._activeDownloadRequest = request;
 }
 
 function Reboot(device, request, callback) {
+  // Cancel active download
+  if (device._activeDownloadRequest) {
+    console.log("🛑 Cancelling active download due to reboot");
+    device._activeDownloadRequest.destroy();
+    delete device._activeDownloadRequest;
+    
+    if (device._downloadInProgress) {
+      device._downloadInProgress = false;
+
+      // Queue TransferComplete with cancellation fault
+      queueTransferComplete(
+        "cancelled_by_reboot",
+        new Date(),
+        "9010",
+        "Download failure"
+      );
+    }
+  }
+
   let response = xmlUtils.node("cwmp:RebootResponse", {}, "");
   callback(response);
   let timeout = sim.stopSession(); //stops accepting connections for timeoutseconds
 
   setTimeout(function() {
     sim.startSession("1 BOOT,M Reboot,4 VALUE CHANGE");
-  }, parseInt(timeout) + 10000);
+  }, Number.parseInt(timeout, 10) + 10000);
 }
 
 function FactoryReset(device, request, callback) {
   let response = xmlUtils.node("cwmp:FactoryResetResponse", {}, "");
   callback(response);
-  setTimeout(function(){process.kill(process.pid);
-  },500);
+  setTimeout(function() {process.kill(process.pid);
+  },sessionFactoryResetDelayMs);
 }
 
 exports.inform = inform;
