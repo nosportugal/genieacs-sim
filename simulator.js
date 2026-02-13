@@ -180,17 +180,21 @@ function handleMethod(xml) {
     // Check if firmware reboot is pending AND we're ending a TransferComplete session
     if (device._pendingReboot && device._firmwareUpgrade && device._transferCompleteSession) {
       console.log(`🔄 TransferComplete session ended, initiating reboot for firmware upgrade`);
+      const targetFirmwareVersion = device._targetFirmwareVersion || null;
       delete device._pendingReboot;
       delete device._firmwareUpgrade;
       delete device._transferCompleteSession;
+      delete device._targetFirmwareVersion;
       
       const rebootTimeout = stopSession();
       setTimeout(() => {
         console.log(`🚀 Device booting after firmware upgrade`);
         
         // Update software version to simulate firmware change
-        updateParameter("Device.DeviceInfo.SoftwareVersion", "2.0.0-upgraded");
-        updateParameter("InternetGatewayDevice.DeviceInfo.SoftwareVersion", "2.0.0-upgraded");
+        if (targetFirmwareVersion) {
+          updateParameter("Device.DeviceInfo.SoftwareVersion", targetFirmwareVersion);
+          updateParameter("InternetGatewayDevice.DeviceInfo.SoftwareVersion", targetFirmwareVersion);
+        }
         
         startSession("1 BOOT,M Download,4 VALUE CHANGE");
       }, rebootTimeout);
@@ -313,6 +317,7 @@ function start(dataModel, serialNumber, macAddress, acsUrl, defaultTimeout) {
   delete device._firmwareUpgrade;
   delete device._transferCompleteSession;
   delete device._downloadInProgress;
+  delete device._targetFirmwareVersion;
   device._activeDownloadRequest = null;
   
   if (device["DeviceID.SerialNumber"])
