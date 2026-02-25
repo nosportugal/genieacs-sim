@@ -496,6 +496,22 @@ function downloadFile(device, commandKey, startTime, url, urlObj, fileType) {
       if (fileType === "1 Firmware Upgrade Image") {
         console.log(`🔄 Firmware upgrade: TransferComplete will be sent, then device will reboot`);
         
+        // Extract the firmware filename from the download URL
+        // Handles both proxy and direct URLs by taking the last path segment
+        // e.g., "http://172.19.0.8:7567/https://hgw-sw-dev.nos.pt/askey/RV5ASK_monolith_20200910124875_1.1.5.1-D31.p7b"
+        //     → "RV5ASK_monolith_20200910124875_1.1.5.1-D31.p7b"
+        console.log(`🔄 The URL for fimware version upgrade: ${url}`);
+        const filenameMatch = url.match(/\/([^/]+)$/);
+        if (filenameMatch) {
+          device._targetFirmwareVersion = filenameMatch[1];
+          console.log(`📦 Target firmware version extracted from URL: ${device._targetFirmwareVersion}`);
+        } else {
+          // Fallback: use the filename as version identifier
+          const filename = url.split("/").pop() || "unknown";
+          device._targetFirmwareVersion = filename;
+          console.log(`⚠️ Could not extract version from URL, using filename: ${device._targetFirmwareVersion}`);
+        }
+
         // Set a flag to trigger reboot after TransferComplete
         device._pendingReboot = true;
         device._firmwareUpgrade = true;
