@@ -6,7 +6,7 @@ DeviceID.SerialNumber,false,false,8KA8WA1151100043,xsd:string
 InternetGatewayDevice,true,false,,
 InternetGatewayDevice.DeviceInfo,true,false,,
 InternetGatewayDevice.DeviceInfo.AdditionalSoftwareVersion,false,false,1.0.0,xsd:string
-InternetGatewayDevice.DeviceInfo.Description,false,false,Huawei WiMAX Home Gateway,xsd:string
+InternetGatewayDevice.DeviceInfo.Description,false,true,Huawei WiMAX Home Gateway,xsd:string
 InternetGatewayDevice.DeviceInfo.DeviceLog,false,false,,xsd:string
 InternetGatewayDevice.DeviceInfo.HardwareVersion,false,false,40501,xsd:string
 InternetGatewayDevice.DeviceInfo.Manufacturer,false,false,"Huawei Technologies Co., Ltd.",xsd:string
