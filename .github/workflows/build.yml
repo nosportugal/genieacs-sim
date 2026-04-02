@@ -1,0 +1,41 @@
+name: Build ⚙️
+
+on:
+  workflow_dispatch:
+    inputs:
+      IMAGE_NAME:
+        description: "The name of the Artifactory image repository"
+        required: true
+        type: string
+        default: "genieacs-sim"
+      VERSION_FILE_PATH:
+        description: "Path to the file containing the version"
+        required: false
+        type: string
+        default: "package.json"
+      VERSION_FILE_REGEX:
+        description: "Regex pattern to extract version from the file"
+        required: false
+        type: string
+        default: '"version":\s*"(.*)"'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    name: Build - ${{ github.ref_name }} ⚙️
+    runs-on: ubuntu-latest
+    outputs:
+      IMAGE_URL: ${{ steps.build_action.outputs.IMAGE_URL }}
+      SHA: ${{ steps.build_action.outputs.SHA }}
+    steps:
+      - name: Build and Push Docker Image 📦
+        id: build_action
+        uses: nosportugal/github-actions/build@main
+        with:
+          ARTIFACTORY_URL_DOCKER: ${{ secrets.ARTIFACTORY_URL_DOCKER }}
+          IMAGE_NAME: ${{ inputs.IMAGE_NAME }}
+          VERSION_FILE_PATH: ${{ inputs.VERSION_FILE_PATH }}
+          VERSION_FILE_REGEX: ${{ inputs.VERSION_FILE_REGEX }}
