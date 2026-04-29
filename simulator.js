@@ -208,7 +208,11 @@ function handleMethod(xml) {
     // Firmware upgrade pending, TransferComplete not yet sent - start TransferComplete session first
     if (device._pendingReboot && device._firmwareUpgrade && !device._transferCompleteSession) {
       console.log(`📋 Starting TransferComplete session for pending firmware upgrade`);
-      startSession("7 TRANSFER COMPLETE");
+      // Create a new HTTP agent and delay to let the ACS clean up the previous session
+      httpAgent = new http.Agent({ keepAlive: true, maxSockets: 1 });
+      setTimeout(function () {
+        startSession("7 TRANSFER COMPLETE");
+      }, 1000);
       return;
     }
 
