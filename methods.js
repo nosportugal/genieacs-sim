@@ -446,9 +446,19 @@ function Download(device, request, callback) {
 }
 
 function createCwmpFault(faultCode, faultString) {
-  return xmlUtils.node("cwmp:Fault", {}, [
-    xmlUtils.node("FaultCode", {}, String(faultCode)),
-    xmlUtils.node("FaultString", {}, xmlParser.encodeEntities(faultString))
+  let fault = xmlUtils.node(
+    "detail",
+    {},
+    xmlUtils.node("cwmp:Fault", {}, [
+      xmlUtils.node("FaultCode", {}, String(faultCode)),
+      xmlUtils.node("FaultString", {}, xmlParser.encodeEntities(faultString))
+    ])
+  );
+
+  return xmlUtils.node("soap-env:Fault", {}, [
+    xmlUtils.node("faultcode", {}, "Client"),
+    xmlUtils.node("faultstring", {}, "CWMP fault"),
+    fault
   ]);
 }
 
@@ -516,10 +526,7 @@ function downloadFile(device, commandKey, startTime, url, urlObj, fileType) {
         device._pendingReboot = true;
         device._firmwareUpgrade = true;
 
-        // Start TransferComplete session
-        setTimeout(() => {
-          sim.startSession("7 TRANSFER COMPLETE");
-        }, transferCompleteDelayMs);
+        // TransferComplete session will be started by handleMethod when current session ends
       } else {
         console.log(`📋 Starting TransferComplete session for non-firmware upgrade`);
         

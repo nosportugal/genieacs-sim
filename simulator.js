@@ -79,9 +79,18 @@ function sendRequest(xml, callback) {
       });
 
       if (Math.floor(response.statusCode / 100) !== 2) {
-        throw new Error(
-          `Unexpected response Code from ACS ${response.statusCode}: ${body}`
+        console.error(
+          `⚠️ Unexpected response Code from ACS ${response.statusCode}: ${body}`
         );
+        httpAgent.destroy();
+
+        // Schedule a retry session if device is accepting connections and no session pending
+        if (acceptConnections && nextInformTimeout === null) {
+          nextInformTimeout = setTimeout(function () {
+            startSession(null);
+          }, 30000);
+        }
+        return;
       }
 
       if (+response.headers["Content-Length"] > 0 || body.length > 0)
@@ -96,8 +105,27 @@ function sendRequest(xml, callback) {
     });
   });
 
-  request.setTimeout(Number.parseInt(timeout, 10)+30000, function (err) {
-    throw new Error("Socket timed out");
+  request.setTimeout(Number.parseInt(timeout, 10)+30000, function () {
+    console.error("⚠️ Socket timed out");
+    request.destroy();
+    httpAgent.destroy();
+
+    if (acceptConnections && nextInformTimeout === null) {
+      nextInformTimeout = setTimeout(function () {
+        startSession(null);
+      }, 30000);
+    }
+  });
+
+  request.on("error", function (err) {
+    console.error(`⚠️ Request error: ${err.message}`);
+    httpAgent.destroy();
+
+    if (acceptConnections && nextInformTimeout === null) {
+      nextInformTimeout = setTimeout(function () {
+        startSession(null);
+      }, 30000);
+    }
   });
 
   return request.end(body);
@@ -176,6 +204,13 @@ function cpeRequest(requestXml) {
 function handleMethod(xml) {
   if (!xml) {
     httpAgent.destroy();
+
+    // Firmware upgrade pending, TransferComplete not yet sent - start TransferComplete session first
+    if (device._pendingReboot && device._firmwareUpgrade && !device._transferCompleteSession) {
+      console.log(`📋 Starting TransferComplete session for pending firmware upgrade`);
+      startSession("7 TRANSFER COMPLETE");
+      return;
+    }
 
     // Check if firmware reboot is pending AND we're ending a TransferComplete session
     if (device._pendingReboot && device._firmwareUpgrade && device._transferCompleteSession) {
