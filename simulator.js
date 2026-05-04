@@ -447,7 +447,22 @@ function getRequestIdAndBody(xml) {
   return [requestId, bodyElement];
 }
 
+// Start a TransferComplete session if no session is currently active.
+// Called after async firmware download completes to avoid waiting forever
+// for a connection request when the session already ended.
+function startTransferCompleteIfIdle() {
+  if (nextInformTimeout !== null) {
+    clearTimeout(nextInformTimeout);
+    nextInformTimeout = setTimeout(function () {
+      startSession("7 TRANSFER COMPLETE");
+    }, 1000);
+  }
+  // If nextInformTimeout === null, a session is in progress and
+  // handleMethod will trigger TransferComplete when it ends.
+}
+
 exports.start = start;
 exports.startSession = startSession;
+exports.startTransferCompleteIfIdle = startTransferCompleteIfIdle;
 exports.stopSession = stopSession;
 exports.updateParameter = updateParameter;
