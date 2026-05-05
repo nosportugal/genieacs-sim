@@ -526,7 +526,11 @@ function downloadFile(device, commandKey, startTime, url, urlObj, fileType) {
         device._pendingReboot = true;
         device._firmwareUpgrade = true;
 
-        // TransferComplete session will be started by handleMethod when current session ends
+        // If a session is still active, handleMethod will start TransferComplete when it ends.
+        // If the session already ended (download took longer), start it now.
+        setTimeout(() => {
+          sim.startTransferCompleteIfIdle();
+        }, transferCompleteDelayMs);
       } else {
         console.log(`📋 Starting TransferComplete session for non-firmware upgrade`);
         
