@@ -86,9 +86,11 @@ function sendRequest(xml, callback) {
 
         // Schedule a retry session if device is accepting connections and no session pending
         if (acceptConnections && nextInformTimeout === null) {
+          const retryDelay = 10000 + Math.random() * 15000; // 10-25 s jitter
+          console.log(`Retrying session in ${Math.round(retryDelay)}ms`);
           nextInformTimeout = setTimeout(function () {
             startSession(null);
-          }, 30000);
+          }, retryDelay);
         }
         return;
       }
@@ -401,8 +403,14 @@ function start(dataModel, serialNumber, macAddress, acsUrl, defaultTimeout) {
 function stopSession() {
   acceptConnections = false;
   console.log(`Simulator Stopped listening for requests for ${timeout}`);
+  // Destroy the agent so GenieACS sees the TCP connection close.
+  // Prevents the ACS from keeping the previous session alive and
+  // rejecting subsequent reconnection attempts with "CPE already in session".
+  httpAgent.destroy();
   setTimeout(() => {
     acceptConnections = true;
+    // Recreate agent to start fresh connections
+    httpAgent = new http.Agent({ keepAlive: true, maxSockets: 1 });
     console.log(`Simulator resumed listening.`);
   }, timeout);
   return timeout;

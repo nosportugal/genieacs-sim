@@ -582,7 +582,7 @@ function Reboot(device, request, callback) {
     console.log("🛑 Cancelling active download due to reboot");
     device._activeDownloadRequest.destroy();
     delete device._activeDownloadRequest;
-    
+
     if (device._downloadInProgress) {
       device._downloadInProgress = false;
 
@@ -596,13 +596,14 @@ function Reboot(device, request, callback) {
     }
   }
 
+  // Use the same pending-reboot path as firmware upgrades.
+  // This avoids a race where startSession fires before handleMethod
+  // processes the session-end callback.
+  device._pendingReboot = true;
+  console.log(`🔄 Reboot: session will end, device will stop listening and restart`);
+
   let response = xmlUtils.node("cwmp:RebootResponse", {}, "");
   callback(response);
-  let timeout = sim.stopSession(); //stops accepting connections for timeoutseconds
-
-  setTimeout(function() {
-    sim.startSession("1 BOOT,M Reboot,4 VALUE CHANGE");
-  }, Number.parseInt(timeout, 10) + 10000);
 }
 
 function FactoryReset(device, request, callback) {
