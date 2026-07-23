@@ -325,6 +325,13 @@ function SetParameterValues(device, request, callback) {
 
     device[name][1] = xmlParser.decodeEntities(value.text);
     device[name][2] = xmlParser.parseAttrs(value.attrs).find(a => a.localName === "type").value;
+
+    // Snapshot the modified value so it survives mock reboots.
+    // Without this, the data model resets to factory defaults after
+    // the simulated reboot (stopSession + startSession), causing
+    // tests to see stale values when they read back the parameter.
+    if (!device._persistState) device._persistState = {};
+    device._persistState[name] = { value: device[name][1], type: device[name][2] };
   }
 
   let response = xmlUtils.node("cwmp:SetParameterValuesResponse", {}, xmlUtils.node("Status", {}, "0"));

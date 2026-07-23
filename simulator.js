@@ -408,6 +408,16 @@ function stopSession() {
   // rejecting subsequent reconnection attempts with "CPE already in session".
   httpAgent.destroy();
   setTimeout(() => {
+    // Restore persisted SetParameterValues so the mock reboot doesn't
+    // lose user-modified parameters (e.g. ProxyServerPort changed by a test).
+    if (device && device._persistState) {
+      for (const [name, saved] of Object.entries(device._persistState)) {
+        if (device[name]) {
+          device[name][1] = saved.value;
+          device[name][2] = saved.type;
+        }
+      }
+    }
     acceptConnections = true;
     // Recreate agent to start fresh connections
     httpAgent = new http.Agent({ keepAlive: true, maxSockets: 1 });
