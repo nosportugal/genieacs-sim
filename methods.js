@@ -325,6 +325,13 @@ function SetParameterValues(device, request, callback) {
 
     device[name][1] = xmlParser.decodeEntities(value.text);
     device[name][2] = xmlParser.parseAttrs(value.attrs).find(a => a.localName === "type").value;
+
+    // Snapshot the modified value so it survives mock reboots.
+    // Without this, the data model resets to factory defaults after
+    // the simulated reboot (stopSession + startSession), causing
+    // tests to see stale values when they read back the parameter.
+    if (!device._persistState) device._persistState = {};
+    device._persistState[name] = { value: device[name][1], type: device[name][2] };
   }
 
   let response = xmlUtils.node("cwmp:SetParameterValuesResponse", {}, xmlUtils.node("Status", {}, "0"));
@@ -582,7 +589,7 @@ function Reboot(device, request, callback) {
     console.log("🛑 Cancelling active download due to reboot");
     device._activeDownloadRequest.destroy();
     delete device._activeDownloadRequest;
-    
+
     if (device._downloadInProgress) {
       device._downloadInProgress = false;
 
@@ -596,13 +603,14 @@ function Reboot(device, request, callback) {
     }
   }
 
+  // Use the same pending-reboot path as firmware upgrades.
+  // This avoids a race where startSession fires before handleMethod
+  // processes the session-end callback.
+  device._pendingReboot = true;
+  console.log(`🔄 Reboot: session will end, device will stop listening and restart`);
+
   let response = xmlUtils.node("cwmp:RebootResponse", {}, "");
   callback(response);
-  let timeout = sim.stopSession(); //stops accepting connections for timeoutseconds
-
-  setTimeout(function() {
-    sim.startSession("1 BOOT,M Reboot,4 VALUE CHANGE");
-  }, Number.parseInt(timeout, 10) + 10000);
 }
 
 function FactoryReset(device, request, callback) {
