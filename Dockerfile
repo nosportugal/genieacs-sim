@@ -1,5 +1,5 @@
 
-FROM node:23.11.1-alpine
+FROM node:24.22.1-alpine
 
 RUN apk update && apk upgrade
 WORKDIR /opt
